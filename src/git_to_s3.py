@@ -6,11 +6,26 @@ from zipfile import ZipFile
 import json
 import urllib2
 import boto3
+import re
 
 ARCHIVE_SUFFIX = "/archive/master.zip"
 BUCKET_NAME = "smallfami.ly"
+REGION = "us-west-1"
 
-bucket = boto3.resource('s3').Bucket(BUCKET_NAME)
+bucket = boto3.resource('s3', region_name=REGION).Bucket(BUCKET_NAME)
+
+
+def get_content_type(filename):
+    if re.match(r'.*\.html', filename, re.IGNORECASE):
+        return "text/html"
+    elif re.match(r'.*\.jpg', filename, re.IGNORECASE):
+        return "image/jpeg"
+    elif re.match(r'.*\.png', filename, re.IGNORECASE):
+        return "image/png"
+    elif re.match(r'.*\.css', filename, re.IGNORECASE):
+        return "text/css"
+    else:
+        return None
 
 
 def handler(event, context):
@@ -36,8 +51,11 @@ def handler(event, context):
     for root, dirs, files in os.walk(content_root):
         relative_dir = string.replace(root, content_root, "")[1:]
         for file in files:
-            full_path = os.path.join(root,file)
-            relative_path = "{}/{}".format(relative_dir,file) if relative_dir else file
-            print "{} -> {}".format(full_path, relative_path)
-            bucket.upload_file(full_path,relative_path)
-
+            full_path = os.path.join(root, file)
+            relative_path = "{}/{}".format(relative_dir, file) if relative_dir else file
+            content_type = get_content_type(file)
+            print "{} -> {} (Content type: {})".format(full_path, relative_path, content_type)
+            args = [full_path, relative_path]
+            if content_type:
+                args.append({'ContentType': content_type})
+            bucket.upload_file(*args)
